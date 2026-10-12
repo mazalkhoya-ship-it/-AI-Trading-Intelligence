@@ -1,72 +1,56 @@
 import asyncio
 import os
-import sqlite3
-import threading
-import time
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
-from sklearn.ensemble import RandomForestClassifier
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
-import uvicorn
+from fastapi import FastAPI
 import requests
-import numpy as np
-import pandas as pd
+from telegram.ext import ApplicationBuilder, CommandHandler
+import uvicorn
 
-# قراءة المتغيرات والبيانات الأساسية
-TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-PUBLIC_URL = os.getenv('PUBLIC_URL', '').rstrip('/')
-DB = os.getenv('DATABASE_PATH', 'trading_ai.db')
-DEFAULT_SYMBOL = os.getenv('SYMBOL', 'BTCUSDT')
-DEFAULT_INTERVAL = os.getenv('INTERVAL', '1m')
-BINANCE = 'https://api.binance.com'
+# جلب التوكن بأمان دون إسقاط السيرفر إذا لم يجده
+TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 
-app = FastAPI(title='AI Trading Intelligence')
+app = FastAPI(title="TradeAI Bot")
 
-# إعداد قاعدة البيانات
-def db():
-    c = sqlite3.connect(DB)
-    c.row_factory = sqlite3.Row
-    return c
 
-def init_db():
-    conn = db()
-    conn.execute('''CREATE TABLE IF NOT EXISTS signals (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ts TEXT,
-        symbol TEXT,
-        action TEXT,
-        price REAL,
-        conf REAL
-    )''')
-    conn.commit()
-    conn.close()
+@app.get("/")
+def home():
+  return {"status": "ok", "bot_running": bool(TOKEN)}
 
-init_db()
 
-# مسار الصفحة الرئيسية للتحقق من عمل السيرفر
-@app.get('/')
-def read_root():
-    return {"status": "ok", "message": "AI Trading Intelligence Bot is running live!"}
+async def start_cmd(update, context):
+  await update.message.reply_text(
+      "🚀 مرحباً بك! البوت يعمل الآن بنجاح 100% على Render."
+  )
 
-# دوال البوت وأوامره
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    welcome_text = (
-        "🤖 أهلاً بك في بوت ذكاء التداول (AI Trading Intelligence)!\n\n"
-        "البوت يعمل بنجاح وجاهز لتقديم تحليلات السوق والإشارات.\n"
-        "استخدم الأوامر التالية:\n"
-        "/start - إرسال القائمة الرئيسية\n"
-        "/status - فحص حالة النظام والاتصال"
+
+async def run_bot():
+  if not TOKEN:
+    print("❌ خطأ حرج: لم يتم العثور على TELEGRAM_BOT_TOKEN في Environment!")
+    return
+
+  # مسح الـ Webhook لتفادي أي تعارض مع Polling
+  try:
+    requests.get(
+        f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true",
+        timeout=10,
     )
-    await update.message.reply_text(welcome_text)
+  except Exception as e:
+    print(f"تنبيه Webhook: {e}")
 
-async def status_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🟢 الحالة: النظام يعمل بنجاح ومتصل بـ Render و Telegram Polling.")
+  # إعداد وتطبيق البوت
+  application = ApplicationBuilder().token(TOKEN).build()
+  application.add_handler(CommandHandler("start", start_cmd))
 
-# دالة تشغيل بوت التيليجرام بالتزامن مع FastAPI
-async def start_telegram_bot():
-    if not TOKEN:
-        print("تحذير: TELEGRAM_BOT_TOKEN غير موجود!")
-        return
-    
-    # مسح أي Webhook قديم لتفادي التعارض وتفعيل الـ Polling
+  await application.initialize()
+  await application.start()
+  await application.updater.start_polling(drop_pending_updates=True)
+  print("✅ تم تشغيل الـ Polling واستقبال الرسائل بنجاح!")
+
+
+@app.on_event("startup")
+async def startup():
+  asyncio.create_task(run_bot())
+
+
+if __name__ == "__main__":
+  port = int(os.getenv("PORT", 10000))
+  uvicorn.run(app, host="0.0.0.0", port=port)
