@@ -5,45 +5,40 @@ import requests
 from telegram.ext import ApplicationBuilder, CommandHandler
 import uvicorn
 
-# جلب التوكن بأمان دون إسقاط السيرفر إذا لم يجده
-TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+# التوكن موضوع مباشرة لضمان عدم حدوث أي خطأ في قراءة متغيرات المنصة
+TOKEN = "8750652390:AAEshkDnJ_PoiOMJYNLntYEBBQ9uTOxtFYE"
 
 app = FastAPI(title="TradeAI Bot")
 
 
 @app.get("/")
 def home():
-  return {"status": "ok", "bot_running": bool(TOKEN)}
+  return {"status": "ok", "message": "Bot is active and running!"}
 
 
 async def start_cmd(update, context):
   await update.message.reply_text(
-      "🚀 مرحباً بك! البوت يعمل الآن بنجاح 100% على Render."
+      "🚀 أهلاً بك! البوت يعمل الآن بنجاح تام على تيليجرام."
   )
 
 
 async def run_bot():
-  if not TOKEN:
-    print("❌ خطأ حرج: لم يتم العثور على TELEGRAM_BOT_TOKEN في Environment!")
-    return
-
-  # مسح الـ Webhook لتفادي أي تعارض مع Polling
+  # مسح الـ Webhook القديم لضمان عمل الـ Polling بدون تعارض
   try:
     requests.get(
         f"https://api.telegram.org/bot{TOKEN}/deleteWebhook?drop_pending_updates=true",
         timeout=10,
     )
   except Exception as e:
-    print(f"تنبيه Webhook: {e}")
+    print(f"Webhook error: {e}")
 
-  # إعداد وتطبيق البوت
   application = ApplicationBuilder().token(TOKEN).build()
   application.add_handler(CommandHandler("start", start_cmd))
 
   await application.initialize()
   await application.start()
   await application.updater.start_polling(drop_pending_updates=True)
-  print("✅ تم تشغيل الـ Polling واستقبال الرسائل بنجاح!")
+  print("✅ تم تشغيل بوت تيليجرام والاستماع للرسائل بنجاح!")
 
 
 @app.on_event("startup")
